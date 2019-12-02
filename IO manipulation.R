@@ -1,5 +1,5 @@
 #----------------------------------------------------------------------
-# Database and data manipulation for macroeconomic modelling
+# Database and data manipulation for macroeconomic modeling
 #----------------------------------------------------------------------
 #
 #----------------------------------------------------------------------
@@ -29,7 +29,7 @@ ANZSIC1to4 <- readxl::read_xls("C:/Users/aelde/OneDrive/Documents/GitHub/METRIC/
 # Fair bit of work here to get this into the required shape
 ANZSIC1to4 <- ANZSIC1to4[-c(1:5),-1]
 
-# Split the coloumns into names and codes
+# Split the columns into names and codes
 ANZSIC1to4 <- ANZSIC1to4 %>% 
   mutate('1D_NAME' = gsub("*[0-9]",NA, ...3),
          '2D_NAME' = gsub("*[0-9]",NA, ...4),
@@ -42,12 +42,12 @@ ANZSIC1to4 <- ANZSIC1to4 %>%
   select("1D_CODE","1D_NAME","2D_CODE","2D_NAME",
          "3D_CODE","3D_NAME","4D_CODE","4D_NAME") 
 
-# Carry arcoss the data in the first 3 rows, so NA.LOCF will work
+# Carry across the data in the first 3 rows, so NA.LOCF will work
 ANZSIC1to4[1,-c(1:2)] <- ANZSIC1to4[1,2]
 ANZSIC1to4[2,-c(1:4)] <- ANZSIC1to4[2,4]
 ANZSIC1to4[3,-c(1:6)] <- ANZSIC1to4[3,6]
 
-# Carry down the last observations before NA in each coloumn. Note a cleaner way to do this is with SAPPLY
+# Carry down the last observations before NA in each column. Note a cleaner way to do this is with SAPPLY
 ANZSIC1to4 <- ANZSIC1to4 %>% 
   mutate('1D_NAME' = na.locf(`1D_NAME`),
          '2D_NAME' = na.locf(`2D_NAME`),
@@ -78,7 +78,7 @@ IOIG_ANZSIC <- IOIG_ANZSIC %>%
   mutate(`IOIG Descriptor` =zoo::na.locf(`IOIG Descriptor`)) %>% 
   rename(`4D_CODE` = `ANZSIC Code`) %>% 
   left_join(ANZSIC1to4)
- 
+
 # Wine spirits and tobbaco (1205 in the IO table) is split into 3 cat in the concordance, adjusting 
 
 IOIG_ANZSIC$IOIG <- gsub("1203","1205",IOIG_ANZSIC$IOIG )
@@ -118,7 +118,7 @@ SMAT[,-1] <- sapply(SMAT[,-1],function(x){
   
 })
 
-# Transacrion matrix
+# Transaction matrix
 
 TMAT <- IO_tab_8_1617[3:116,3:116] %>%  
   sapply(function(x)as.numeric(x))
@@ -142,7 +142,7 @@ row.names(FDMAT) <- unique(IO_tab_8_1617$`1D_CODE`)[-1]
 
 TOMAT <- IO_tab_8_1617[-c(1:2,3:116,126:127),3:116] %>% 
   sapply(function(x)as.numeric(x))
-  
+
 TOMAT <- as.matrix(SMAT[,-1])%*%t(as.matrix(TOMAT)) %>% 
   t()
 
@@ -165,7 +165,7 @@ IO_TAB_1D_1617 <- tibble(From_IND = c(unique(IO_tab_8_1617$`1D_CODE`)[-1],"T1","
 
 
 #----------------------------------------------------------------------
-# Create additional matrices for Leontif
+# Create additional matrices for Leontief
 #----------------------------------------------------------------------
 
 AMAT <-  TMAT%*%((FDMAT[,"T6"])^-1*diag(dim(TMAT)[1])) 
