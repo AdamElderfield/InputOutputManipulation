@@ -9,7 +9,7 @@ library(tidyverse)                        # For data manipulation / visualsation
 library(zoo)
 
 #----------------------------------------------------------------------
-# Read in raw data from ABS
+# Read in raw data from ABS - TO DO, automate download from ABS website
 #----------------------------------------------------------------------
 
 # TABLE 8. INDUSTRY BY INDUSTRY FLOW TABLE (INDIRECT ALLOCATION OF IMPORTS)
@@ -18,7 +18,7 @@ IO_tab_8_1617 <- readxl::read_xls("C:/Users/aelde/OneDrive/Documents/GitHub/METR
 # Table 40. IOIG(2015) to ANZSIC06 CONCORDANCE 
 IOIG_ANZSIC <- readxl::read_xls("C:/Users/aelde/OneDrive/Documents/GitHub/METRIC/Model/data/ABS/IO tables/IO Concordances.xls", sheet = "IOIG(2015) to ANZSIC06")
 
-# Table 40. IOIG(2015) to ANZSIC06 CONCORDANCE 
+# ANZSIC06 1 DIGIT TO 4 DIGIT  CONCORDANCE
 ANZSIC1to4 <- readxl::read_xls("C:/Users/aelde/OneDrive/Documents/GitHub/METRIC/Model/data/ABS/IO tables/1292.0.55.002_anzsic 2006 - codes and titles.xls", sheet ="Classes")
 
 #----------------------------------------------------------------------
@@ -140,26 +140,26 @@ row.names(FDMAT) <- unique(IO_tab_8_1617$`1D_CODE`)[-1]
 
 # Total outlays matrix
 
-TOMAT <- IO_tab_8_1617[-c(1:2,3:116,126:127),3:116] %>% 
+TOMAT <- IO_tab_8_1617[-c(1:2,3:116,127),3:116] %>% 
   sapply(function(x)as.numeric(x))
 
 TOMAT <- as.matrix(SMAT[,-1])%*%t(as.matrix(TOMAT)) %>% 
   t()
 
 colnames(TOMAT) <- unique(IO_tab_8_1617$`1D_CODE`)[-1]
-row.names(TOMAT) <- c("T1","P1","P2","P3","P4","P5","P6","Y","GVA")
+row.names(TOMAT) <- c("T1","P1","P2","P3","P4","P5","D","P6","Y","GVA")
 
 # Total outlays on FD side
 
-TOFD <-  IO_tab_8_1617[-c(1:2,3:116,126:127),-c(1:2,3:116,127:128)] %>% 
+TOFD <-  IO_tab_8_1617[-c(1:2,3:116,127),-c(1:2,3:116,127:128)] %>% 
   sapply(function(x)as.numeric(x))
 
 colnames(TOFD) <- IO_tab_8_1617[2,-c(1:2,3:116,127:128)]
-row.names(TOFD) <- c("T1","P1","P2","P3","P4","P5","Y","P6","GVA")
+row.names(TOFD) <- c("T1","P1","P2","P3","P4","P5","D","P6","Y","GVA")
 
 # Put back together
 
-IO_TAB_1D_1617 <- tibble(From_IND = c(unique(IO_tab_8_1617$`1D_CODE`)[-1],"T1","P1","P2","P3","P4","P5","Y","P6","GVA")) %>% 
+IO_TAB_1D_1617 <- tibble(From_IND = c(unique(IO_tab_8_1617$`1D_CODE`)[-1],"T1","P1","P2","P3","P4","P5","D","P6","Y","GVA")) %>% 
   cbind(rbind(TMAT,TOMAT)) %>% 
   cbind(rbind(FDMAT,TOFD))
 
