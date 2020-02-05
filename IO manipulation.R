@@ -15,6 +15,23 @@ library(zoo)
 # TABLE 8. INDUSTRY BY INDUSTRY FLOW TABLE (INDIRECT ALLOCATION OF IMPORTS)
 IO_tab_8_1617 <- readxl::read_xls("C:/Users/aelde/OneDrive/Documents/GitHub/METRIC/Model/data/ABS/IO tables/520905500108_201617.xls", sheet = "Table 8")
 
+
+names_tab3 <- tibble(file_name =c("(16-17)","(15-16)","(14-15)","(13-14)","(12-13)","(09-10)","(08-09)","(07-08)","(06-07)"),
+                list_name = c("16-17","15-16","14-15","13-14","12-13","09-10","08-09","07-08","06-07"))
+
+# TABLE 3. IMPORTS BY INDUSTRY TO INDUSTRY
+IO_tab_3 <- list()
+for(i in 1:dim(names_tab3)[1]){
+  
+  file_name <- names_tab3[["file_name"]][i]
+  list_name <- names_tab3[["list_name"]][i]
+  
+  IO_tab_3[[paste(list_name)]] <- readxl::read_xls(paste0("C:/Users/aelde/OneDrive/Documents/GitHub/METRIC/Model/data/ABS/IO tables/520905500103 ",file_name,".xls"), sheet = "Table 3")
+
+  
+}
+
+
 # Table 40. IOIG(2015) to ANZSIC06 CONCORDANCE 
 IOIG_ANZSIC <- readxl::read_xls("C:/Users/aelde/OneDrive/Documents/GitHub/METRIC/Model/data/ABS/IO tables/IO Concordances.xls", sheet = "IOIG(2015) to ANZSIC06")
 
@@ -90,12 +107,28 @@ IOIG_ANZSIC_1D <- IOIG_ANZSIC %>%
   select(IOIG,`1D_CODE`,`1D_NAME`) %>% 
   distinct()
 
+#----------------------------------------------------------------------
+# Join concordances to tables
+#----------------------------------------------------------------------
+
+
 IO_tab_8_1617 <- IO_tab_8_1617 %>% 
   rename(`IOIG` = ...1) %>%
   left_join(IOIG_ANZSIC_1D) 
 
 IO_tab_8_1617 <- IO_tab_8_1617[rowSums(is.na(IO_tab_8_1617)) != ncol(IO_tab_8_1617),]
 
+IO_tab_3 <-  sapply(IO_tab_3,function(x){
+  
+  
+  colnames(x)[1] <- "IOIG"
+  
+  x <-  left_join(x,IOIG_ANZSIC_1D) 
+  
+  x[rowSums(is.na(x)) != ncol(x),]
+  
+  
+  })
 
 
 #----------------------------------------------------------------------
@@ -163,7 +196,195 @@ IO_TAB_1D_1617 <- tibble(From_IND = c(unique(IO_tab_8_1617$`1D_CODE`)[-1],"T1","
   cbind(rbind(TMAT,TOMAT)) %>% 
   cbind(rbind(FDMAT,TOFD))
 
+# Seems to get to 09-07
+IO_tab_3_agg <- IO_tab_3[-c(1,9)]
 
+IO_tab_3_agg <- lapply(IO_tab_3_agg,function(x){
+
+
+  SMAT <- x %>% 
+    select(`1D_CODE`,IOIG) %>%
+    filter(!is.na(`1D_CODE`)) %>% 
+    mutate(Fill = `1D_CODE`) %>% 
+    spread(IOIG, Fill)
+  
+  SMAT[,-1] <- sapply(SMAT[,-1],function(x){
+    
+    ifelse(is.na(x),0,1)
+    
+  })
+  
+  # Transaction matrix #x[complete.cases(x),3:116] %>%  
+  TMAT <- x[grepl("^[0-9]",x$IOIG),grepl("^[0-9]",x[which(x[,2]=="USE"),])] 
+  TMAT <- TMAT[complete.cases(TMAT),] %>% 
+        sapply(function(x)as.numeric(x))
+  
+  TMAT <- as.matrix(SMAT[,-1])%*%as.matrix(TMAT)%*%t(as.matrix(SMAT[,-1]))
+  
+  colnames(TMAT) <- unique(x$`1D_CODE`)[-1]
+  row.names(TMAT) <- unique(x$`1D_CODE`)[-1]
+  
+  # Final demand matrix
+  FDMAT <- x[grepl("^[0-9]",x$IOIG), grepl("T4|Q1|Q2|Q3|Q4|Q5|Q6|Q7|T5|T6",x[which(x[,1]=="SUPPLY"),])]
+  FDMAT <- FDMAT[complete.cases(FDMAT),] %>% 
+    sapply(function(x)as.numeric(x))
+  
+  FDMAT[is.na(FDMAT)] <- 0
+  
+  FDMAT <- as.matrix(SMAT[,-1])%*%as.matrix(FDMAT)
+  
+  colnames(FDMAT) <- c("T4",	"Q1",	"Q2",	"Q3","Q4", "Q5",	"Q6",	"Q7",	"T5",	"T6")
+  row.names(FDMAT) <- unique(IO_tab_8_1617$`1D_CODE`)[-1]
+  
+  # Total competing imports matrix
+  
+  TOMAT <- colSums(TMAT)
+  TOMAT <-  t(as.matrix(TOMAT))
+  row.names(TOMAT) <- c("TOTAL COMPETING IMPORTS")
+  
+  # Total outlays on FD side
+  TOFD <- colSums(FDMAT)
+  TOFD <-  t(as.matrix(TOFD))
+  
+  colnames(TOFD) <- c("T4",	"Q1",	"Q2",	"Q3","Q4", "Q5",	"Q6",	"Q7",	"T5",	"T6")
+  row.names(TOFD) <- c("TOTAL COMPETING IMPORTS")
+  
+  # Put back together
+  
+  x <- tibble(From_IND = c(unique(x$`1D_CODE`)[-1],"TOTAL COMPETING IMPORTS")) %>% 
+    cbind(rbind(TMAT,TOMAT)) %>% 
+    cbind(rbind(FDMAT,TOFD))
+  
+
+return(x)
+  
+})
+
+
+agg_io_data <- function(x){
+  
+#  x <- IO_tab_3$`16-17`  
+  
+  SMAT <- x %>% 
+    select(`1D_CODE`,IOIG) %>%
+    filter(!is.na(`1D_CODE`)) %>% 
+    mutate(Fill = `1D_CODE`) %>% 
+    spread(IOIG, Fill)
+  
+  SMAT[,-1] <- sapply(SMAT[,-1],function(x){
+    
+    ifelse(is.na(x),0,1)
+    
+  })
+  
+  # Transaction matrix #x[complete.cases(x),3:116] %>%  
+  
+  TMAT <- x[3:116,3:116] %>%  
+    sapply(function(x)as.numeric(x))
+  
+  TMAT <- as.matrix(SMAT[,-1])%*%as.matrix(TMAT)%*%t(as.matrix(SMAT[,-1]))
+  
+  colnames(TMAT) <- unique(x$`1D_CODE`)[-1]
+  row.names(TMAT) <- unique(x$`1D_CODE`)[-1]
+  
+  # Final demand matrix
+  
+  FDMAT <- x[3:116,-c(1:2,3:116,127:128)] %>% 
+    sapply(function(x)as.numeric(x))
+  
+  FDMAT[is.na(FDMAT)] <- 0
+  
+  FDMAT <- as.matrix(SMAT[,-1])%*%as.matrix(FDMAT)
+  
+  colnames(FDMAT) <- x[2,-c(1:2,3:116,127:128)]
+  row.names(FDMAT) <- unique(x$`1D_CODE`)[-1]
+  
+  
+  # Total competing imports matrix
+  
+  TOMAT <- colSums(TMAT)
+  TOMAT <-  t(as.matrix(TOMAT))
+  row.names(TOMAT) <- c("TOTAL COMPETING IMPORTS")
+  
+  # Total outlays on FD side
+  TOFD <- colSums(FDMAT)
+  TOFD <-  t(as.matrix(TOFD))
+  
+  colnames(TOFD) <- c("T4",	"Q1",	"Q2",	"Q3","Q4", "Q5",	"Q6",	"Q7",	"T5",	"T6")
+  row.names(TOFD) <- c("TOTAL COMPETING IMPORTS")
+  
+  # Put back together
+  
+  x <- tibble(From_IND = c(unique(x$`1D_CODE`)[-1],"TOTAL COMPETING IMPORTS")) %>% 
+    cbind(rbind(TMAT,TOMAT)) %>% 
+    cbind(rbind(FDMAT,TOFD))
+  
+  
+  return(x)
+  
+}
+
+IO_tab_3_agg[["16-17"]] <- agg_io_data(IO_tab_3$`16-17`)
+
+# Interpolate missing years with spline (should think about RASING each one)
+
+name_list <- tibble(IO_tab_3_name = names(IO_tab_3_agg),
+                    new_name = c("2016","2015","2014","2013","2010","2009","2008","2017"))
+
+IO_TAB_3 <- list()
+for(i in seq_along(IO_tab_3_agg)){
+  
+  new_name <- name_list$new_name[i]
+  IO_tab_3_agg_name <- name_list$IO_tab_3_name[i]
+  
+   IO_TAB_3[[new_name]] <- IO_tab_3_agg[[IO_tab_3_agg_name]] %>%
+    mutate(Year = new_name) %>%
+    gather(Use, Value, -Year, -From_IND) %>% 
+    rename(Supply = From_IND)
+  
+  
+}
+
+IO_TAB_3 <- bind_rows(IO_TAB_3)
+
+# Create NAs for missing years
+IO_TAB_3 <- IO_TAB_3 %>% 
+  mutate(Year = as.numeric(Year)) %>% 
+  complete(Year = 2008:2017)
+
+#----------------------------------------------------------------------
+# Create function for charts
+#----------------------------------------------------------------------
+
+MIN_IMP <- list()
+  
+  MIN_IMP[["USE"]] <- sapply(IO_tab_3_agg,function(x){
+  
+  
+  y <- x[,"B"]
+  
+  return(y)
+  
+})
+
+  
+  MIN_IMP[["SUPPLY"]] <- sapply(IO_tab_3_agg,function(x){
+    
+    
+    y <- x["B",]
+    
+    return(y)
+    
+  })
+
+  
+# Reorder col
+  
+MIN_IMP <- sapply(MIN_IMP,function(x)x[,c(7,6,5,4,3,2,1,8)])
+  
+
+write.csv(MIN_IMP$USE, "MIN.csv")
+  
 #----------------------------------------------------------------------
 # Create additional matrices for Leontief
 #----------------------------------------------------------------------
