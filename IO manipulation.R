@@ -350,41 +350,51 @@ IO_TAB_3 <- bind_rows(IO_TAB_3)
 # Create NAs for missing years
 IO_TAB_3 <- IO_TAB_3 %>% 
   mutate(Year = as.numeric(Year)) %>% 
-  complete(Year = 2008:2017)
+  group_by(Year,Supply,Use) %>%
+  complete(Year = 2008:2017) %>% 
+  distinct(Value) %>% 
+  group_by(Supply,Use) %>% 
+  mutate(Value = na.spline(Value))
 
 #----------------------------------------------------------------------
-# Create function for charts
+# Create charts
 #----------------------------------------------------------------------
 
-MIN_IMP <- list()
-  
-  MIN_IMP[["USE"]] <- sapply(IO_tab_3_agg,function(x){
-  
-  
-  y <- x[,"B"]
-  
-  return(y)
-  
-})
+# new_name <- tibble(old_name1 = names(IO_tab_3_agg$`16-17`)[-1],
+#                    new_name1 = c("AG","MIN","MAN",rep())
+#                    old_name2 = row.names(IO_tab_3_agg$`16-17`)[-20])
 
-  
-  MIN_IMP[["SUPPLY"]] <- sapply(IO_tab_3_agg,function(x){
-    
-    
-    y <- x["B",]
-    
-    return(y)
-    
-  })
+IO_TAB_3 <-  IO_TAB_3 %>%
+ungroup() %>%
+  group_by(Year, Use) %>% 
+  mutate(Supply =  str_replace_all(Supply, pattern = model_anzsic_conc$`1D_CODE`, replacement = model_anzsic_conc$model_name )) %>%
+  ungroup() %>% 
+  group_by(Supply,Year) %>% 
+  mutate(Use =  str_replace_all(Use, pattern = model_anzsic_conc$`1D_CODE`, replacement = model_anzsic_conc$model_name )) %>%
+  mutate(Use =  ifelse(Use == "R", "ARS", Use),
+         Use =  ifelse(Use == "S", "OS", Use)) %>% 
+  ungroup() %>% 
+  mutate( Supply = gsub("TOTAGL COMPETING IMPORTS", "TOTAL COMPETING IMPORTS", .$Supply))
 
-  
-# Reorder col
-  
-MIN_IMP <- sapply(MIN_IMP,function(x)x[,c(7,6,5,4,3,2,1,8)])
-  
+# Use
 
-write.csv(MIN_IMP$USE, "MIN.csv")
-  
+IO_TAB_3 %>% 
+  filter(Supply != "TOTAL COMPETING IMPORTS") %>%
+  filter(Use %in% model_anzsic_conc$model_name ) %>%
+  left_join(IO_TAB_3 %>%
+              filter(Supply == "TOTAL COMPETING IMPORTS") %>%
+              ungroup() %>% 
+              select(-Supply) %>% 
+              rename(`TOTAL COMPETING IMPORTS` = Value)) %>%
+  ggplot()+
+  geom_bar(aes(x = Year, y = Value, fill = Supply), stat = "identity", colour = "grey") +
+  geom_line(aes(x = Year, y = `TOTAL COMPETING IMPORTS`), size= 1)+
+  theme_bw()+
+  scale_x_continuous(labels = function(x) round(as.numeric(x), digits=0))+ 
+  facet_trelliscope(~Use, scales = "free" , as_plotly = TRUE, path = paste0(getwd(),"/temp"))
+
+
+
 #----------------------------------------------------------------------
 # Create additional matrices for Leontief
 #----------------------------------------------------------------------
